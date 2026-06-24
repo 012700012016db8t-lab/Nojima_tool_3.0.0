@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>家電JANスキャナー (Gemini 3.0)</title>
-    <!-- バーコード読み取りライブラリ ZXing -->
+    <title>家電JANスキャナー (Gemini 3 Flash)</title>
     <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 15px; background-color: #f0f2f5; margin: 0; }
         .container { max-width: 100%; background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); box-sizing: border-box; }
         h2 { font-size: 1.2rem; margin-top: 0; color: #333; }
         #video-container { width: 100%; margin: 15px auto; border: 2px dashed #bbb; border-radius: 8px; overflow: hidden; background: #000; position: relative; }
-        /* playsinlineを効かせるためと、スマホの画面幅に合わせる設定 */
         video { width: 100%; height: auto; display: block; max-height: 50vh; object-fit: cover; }
         .scan-guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 30%; border: 2px solid rgba(255, 0, 0, 0.5); box-sizing: border-box; pointer-events: none; }
         #result { margin-top: 15px; padding: 15px; border: 1px solid #e1e4e8; border-radius: 8px; background-color: #fafbfc; text-align: left; white-space: pre-wrap; font-size: 0.95rem; min-height: 120px; line-height: 1.5; overflow-wrap: break-word;}
@@ -25,7 +23,7 @@
 <body>
 
     <div class="container">
-        <h2>📷 家電JANスキャナー<br><small>(Gemini 3.0 Flash 連携)</small></h2>
+        <h2>📷 家電JANスキャナー<br><small>(Gemini 3 Flash 連携)</small></h2>
 
         <div>
             <input type="password" id="apiKey" placeholder="Google Gemini APIキーを入力">
@@ -37,7 +35,6 @@
         </div>
 
         <div id="video-container" style="display:none;">
-            <!-- iPhone等で全画面再生を防ぐための属性(playsinline)を付与 -->
             <video id="video" autoplay playsinline muted></video>
             <div class="scan-guide"></div>
         </div>
@@ -67,13 +64,11 @@
             resultDiv.innerText = "カメラを起動中... 赤い枠にバーコードを合わせてください。";
 
             try {
-                // スマホのカメラデバイス一覧を取得
                 const videoInputDevices = await codeReader.listVideoInputDevices();
                 if (videoInputDevices.length === 0) {
                     throw new Error("カメラが見つかりません。");
                 }
 
-                // 背面カメラ（アウトカメラ）を探して優先的に選択する
                 let selectedDeviceId = videoInputDevices[0].deviceId;
                 for (const device of videoInputDevices) {
                     const label = device.label.toLowerCase();
@@ -83,16 +78,13 @@
                     }
                 }
 
-                // スキャンの開始
                 codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', async (result, err) => {
                     if (result) {
-                        // 読み取り成功
-                        codeReader.reset(); // カメラ停止
+                        codeReader.reset();
                         videoContainer.style.display = 'none';
                         const janCode = result.text;
-                        resultDiv.innerText = `✅ JANコード: ${janCode}\n\n🔍 Gemini 3.0 でウェブ検索中...`;
+                        resultDiv.innerText = `✅ JANコード: ${janCode}\n\n🔍 Gemini 3 でウェブ検索中...`;
                         
-                        // Gemini呼び出し
                         await fetchProductInfo(janCode, apiKey);
                     }
                 });
@@ -110,11 +102,10 @@
             resultDiv.innerText = "ここに商品情報が表示されます。";
         });
 
-        // Gemini 3.0 APIの呼び出し（ウェブ検索有効化）
         async function fetchProductInfo(janCode, apiKey) {
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent?key=${apiKey}`;
+            // ★ここを正しいGemini 3のエンドポイント名に修正しました
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=${apiKey}`;
             
-            // 家電向けに特化したプロンプト
             const prompt = `JANコードが「${janCode}」の家電製品について、ウェブ検索を用いて最新情報を調べてください。見やすくするために、以下の項目に分けて箇条書きで出力してください。
 
 ・【メーカー名】
@@ -126,7 +117,6 @@
 
             const requestBody = {
                 contents: [{ parts: [{ text: prompt }] }],
-                // Google検索（グラウンディング）を有効化
                 tools: [{ googleSearch: {} }]
             };
 
@@ -144,7 +134,6 @@
                 const data = await response.json();
                 const text = data.candidates[0].content.parts[0].text;
                 
-                // 参照したWebサイトの情報を取り出す
                 const metadata = data.candidates[0].groundingMetadata;
                 let sourcesText = "";
                 if (metadata && metadata.groundingChunks) {
@@ -153,7 +142,6 @@
                         .filter(title => title);
                     
                     if (urls.length > 0) {
-                        // 重複を削除して表示
                         const uniqueUrls = [...new Set(urls)];
                         sourcesText = "\n\n🌐 【参考サイト】\n・" + uniqueUrls.join("\n・");
                     }
@@ -163,7 +151,7 @@
 
             } catch (error) {
                 console.error('Error:', error);
-                resultDiv.innerText = "❌ 情報の取得に失敗しました。\n通信状況を確認するか、APIキーが正しいか確認してください。";
+                resultDiv.innerText = "❌ 情報の取得に失敗しました。\nAPIキーの権限、または通信状況を確認してください。";
             }
         }
     </script>
