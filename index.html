@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>家電JANスキャナー (Gemini 3.0)</title>
+    <!-- バーコード読み取りライブラリ ZXing -->
+    <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 15px; background-color: #f0f2f5; margin: 0; }
+        .container { max-width: 100%; background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); box-sizing: border-box; }
+        h2 { font-size: 1.2rem; margin-top: 0; color: #333; }
+        #video-container { width: 100%; margin: 15px auto; border: 2px dashed #bbb; border-radius: 8px; overflow: hidden; background: #000; position: relative; }
+        /* playsinlineを効かせるためと、スマホの画面幅に合わせる設定 */
+        video { width: 100%; height: auto; display: block; max-height: 50vh; object-fit: cover; }
+        .scan-guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 30%; border: 2px solid rgba(255, 0, 0, 0.5); box-sizing: border-box; pointer-events: none; }
+        #result { margin-top: 15px; padding: 15px; border: 1px solid #e1e4e8; border-radius: 8px; background-color: #fafbfc; text-align: left; white-space: pre-wrap; font-size: 0.95rem; min-height: 120px; line-height: 1.5; overflow-wrap: break-word;}
+        input[type="password"] { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
+        button { width: 100%; padding: 14px; font-size: 1rem; font-weight: bold; cursor: pointer; background-color: #4285F4; color: white; border: none; border-radius: 6px; transition: background 0.3s; margin-bottom: 10px; }
+        button:active { background-color: #3367D6; }
+        #resetButton { background-color: #EA4335; }
+        #resetButton:active { background-color: #C5221F; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>📷 家電JANスキャナー<br><small>(Gemini 3.0 Flash 連携)</small></h2>
+
+        <div>
+            <input type="password" id="apiKey" placeholder="Google Gemini APIキーを入力">
+        </div>
+        
+        <div>
+            <button id="startButton">カメラを起動してスキャン</button>
+            <button id="resetButton" style="display:none;">もう一度スキャンする</button>
+        </div>
+
+        <div id="video-container" style="display:none;">
+            <!-- iPhone等で全画面再生を防ぐための属性(playsinline)を付与 -->
+            <video id="video" autoplay playsinline muted></video>
+            <div class="scan-guide"></div>
+        </div>
+
+        <div id="result">ここに商品情報が表示されます。</div>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('startButton');
+        const resetButton = document.getElementById('resetButton');
+        const videoContainer = document.getElementById('video-container');
+        const resultDiv = document.getElementById('result');
+        const apiKeyInput = document.getElementById('apiKey');
+        let codeReader;
+
+        startButton.addEventListener('click', async () => {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                alert("APIキーを入力してください。");
+                return;
+            }
+
+            codeReader = new ZXing.BrowserMultiFormatReader();
+            videoContainer.style.display = 'block';
+            startButton.style.display = 'none';
+            resetButton.style.display = 'block';
+            resultDiv.innerText = "カメラを起動中... 赤い枠にバーコードを合わせてください。";
+
+            try {
+                // スマホのカメラデバイス一覧を取得
+                const videoInputDevices = await codeReader.listVideoInputDevices();
+                if (videoInputDevices.length === 0) {
+                    throw new Error("カメラが見つかりません。");
+                }
+
+                // 背面カメラ（アウトカメラ）を探して優先的に選択する
+                let selectedDeviceId = videoInputDevices[0].deviceId;
+                for (const device of videoInputDevices) {
+                    const label = device.label.toLowerCase();
+                    if (label.includes('back') || label.includes('rear') || label.includes('environment') || label.includes('背面')) {
+                        selectedDeviceId = device.deviceId;
+                        break;
+                    }
+                }
+
+                // スキャンの開始
+                codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', async (result, err) => {
+                    if (result) {
+                        // 読み取り成功
+                        codeReader.reset(); // カメラ停止
+                        videoContainer.style.display = 'none';
+                        const janCode = result.text;
+                        resultDiv.innerText = `✅ JANコード: ${janCode}\n\n🔍 Gemini 3.0 でウェブ検索中...`;
+                        
+                        // Gemini呼び出し
+                        await fetchProductInfo(janCode, apiKey);
+                    }
+                });
+            } catch (err) {
+                console.error(err);
+                resultDiv.innerText = "カメラの起動に失敗しました。\nブラウザの設定でカメラへのアクセスが許可されているか確認してください。";
+            }
+        });
+
+        resetButton.addEventListener('click', () => {
+            if(codeReader) codeReader.reset();
+            videoContainer.style.display = 'none';
+            startButton.style.display = 'block';
+            resetButton.style.display = 'none';
+            resultDiv.innerText = "ここに商品情報が表示されます。";
+        });
+
+        // Gemini 3.0 APIの呼び出し（ウェブ検索有効化）
+        async function fetchProductInfo(janCode, apiKey) {
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent?key=${apiKey}`;
+            
+            // 家電向けに特化したプロンプト
+            const prompt = `JANコードが「${janCode}」の家電製品について、ウェブ検索を用いて最新情報を調べてください。見やすくするために、以下の項目に分けて箇条書きで出力してください。
+
+・【メーカー名】
+・【商品名および型番】
+・【主な機能・特徴】（3〜5点程度で簡潔に）
+・【発売時期または参考価格】（ウェブ上で確認できる場合のみ）
+
+※情報が見つからない項目は「不明」としてください。`;
+
+            const requestBody = {
+                contents: [{ parts: [{ text: prompt }] }],
+                // Google検索（グラウンディング）を有効化
+                tools: [{ googleSearch: {} }]
+            };
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`APIエラー: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const text = data.candidates[0].content.parts[0].text;
+                
+                // 参照したWebサイトの情報を取り出す
+                const metadata = data.candidates[0].groundingMetadata;
+                let sourcesText = "";
+                if (metadata && metadata.groundingChunks) {
+                    const urls = metadata.groundingChunks
+                        .map(chunk => chunk.web?.title)
+                        .filter(title => title);
+                    
+                    if (urls.length > 0) {
+                        // 重複を削除して表示
+                        const uniqueUrls = [...new Set(urls)];
+                        sourcesText = "\n\n🌐 【参考サイト】\n・" + uniqueUrls.join("\n・");
+                    }
+                }
+                
+                resultDiv.innerText = `【検索完了 - JAN: ${janCode}】\n\n${text}${sourcesText}`;
+
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerText = "❌ 情報の取得に失敗しました。\n通信状況を確認するか、APIキーが正しいか確認してください。";
+            }
+        }
+    </script>
+</body>
+</html>
