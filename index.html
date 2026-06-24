@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>家電JANスキャナー (Gemini 3 Flash)</title>
+    <title>家電JANスキャナー (Gemini 3.5 Flash)</title>
     <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 15px; background-color: #f0f2f5; margin: 0; }
@@ -23,7 +23,7 @@
 <body>
 
     <div class="container">
-        <h2>📷 家電JANスキャナー<br><small>(Gemini 3 Flash 連携)</small></h2>
+        <h2>📷 家電JANスキャナー<br><small>(Gemini 3.5 Flash 連携)</small></h2>
 
         <div>
             <input type="password" id="apiKey" placeholder="Google Gemini APIキーを入力">
@@ -83,7 +83,7 @@
                         codeReader.reset();
                         videoContainer.style.display = 'none';
                         const janCode = result.text;
-                        resultDiv.innerText = `✅ JANコード: ${janCode}\n\n🔍 Gemini 3 でウェブ検索中...`;
+                        resultDiv.innerText = `✅ JANコード: ${janCode}\n\n🔍 Gemini 3.5 Flash でウェブ検索中...`;
                         
                         await fetchProductInfo(janCode, apiKey);
                     }
@@ -103,8 +103,8 @@
         });
 
         async function fetchProductInfo(janCode, apiKey) {
-            // ★ここを正しいGemini 3のエンドポイント名に修正しました
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=${apiKey}`;
+            // ★正しいGemini 3系統のモデル名 (gemini-3.5-flash) に修正しました
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
             
             const prompt = `JANコードが「${janCode}」の家電製品について、ウェブ検索を用いて最新情報を調べてください。見やすくするために、以下の項目に分けて箇条書きで出力してください。
 
@@ -151,7 +151,7 @@
 
             } catch (error) {
                 console.error('Error:', error);
-                resultDiv.innerText = "❌ 情報の取得に失敗しました。\nAPIキーの権限、または通信状況を確認してください。";
+                resultDiv.innerText = "❌ 情報の取得に失敗しました。\n通信状況、またはAPIキーが正しいか確認してください。";
             }
         }
     </script>
